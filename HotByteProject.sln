@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35828.75
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HotByteProject", "HotByteProject\HotByteProject.csproj", "{D14EAC62-82A5-4531-8630-73B37329422A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HotByte_Test", "HotByte_Test\HotByte_Test.csproj", "{38678969-63F3-4719-8043-8C6486E312A0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D14EAC62-82A5-4531-8630-73B37329422A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D14EAC62-82A5-4531-8630-73B37329422A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D14EAC62-82A5-4531-8630-73B37329422A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D14EAC62-82A5-4531-8630-73B37329422A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{38678969-63F3-4719-8043-8C6486E312A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{38678969-63F3-4719-8043-8C6486E312A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{38678969-63F3-4719-8043-8C6486E312A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{38678969-63F3-4719-8043-8C6486E312A0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {52F63598-7C95-4DD5-880A-935B38004EC7}
+	EndGlobalSection
+EndGlobal
