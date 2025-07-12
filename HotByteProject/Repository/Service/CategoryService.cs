@@ -51,16 +51,40 @@ namespace HotByteProject.Services.Implementations
                 .FirstOrDefaultAsync(c => c.CategoryName.ToLower() == name.ToLower());
         }
 
-        public async Task<bool> CreateCategoryAsync(string name)
+        //public async Task<bool> CreateCategoryAsync(string name)
+        //{
+        //    if (string.IsNullOrWhiteSpace(name)) return false;
+
+        //    bool exists = await _context.Categories.AnyAsync(c => c.CategoryName.ToLower() == name.ToLower());
+        //    if (exists) return false;
+
+        //    _context.Categories.Add(new Category { CategoryName = name });
+        //    await _context.SaveChangesAsync();
+        //    return true;
+        //}
+
+
+        public async Task<bool> CreateCategoryAsync(string name, string? imageUrl = null)
         {
             if (string.IsNullOrWhiteSpace(name)) return false;
 
             bool exists = await _context.Categories.AnyAsync(c => c.CategoryName.ToLower() == name.ToLower());
             if (exists) return false;
 
-            _context.Categories.Add(new Category { CategoryName = name });
+            var category = new Category
+            {
+                CategoryName = name,
+                ImageUrl = imageUrl
+            };
+
+            _context.Categories.Add(category);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<bool> CategoryExistsAsync(string name)
+        {
+            return await _context.Categories.AnyAsync(c => c.CategoryName.ToLower() == name.ToLower());
         }
 
         public async Task<bool> DeleteCategoryByNameAsync(string name)
@@ -81,5 +105,19 @@ namespace HotByteProject.Services.Implementations
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<List<CategoryBasicDTO>> GetCategoryNamesAsync()
+        {
+            return await _context.Categories
+                .Where(c => !c.IsDeleted)
+                .Select(c => new CategoryBasicDTO
+                {
+                    CategoryId = c.CategoryId,
+                    CategoryName = c.CategoryName,
+                    ImageUrl=c.ImageUrl
+                })
+                .ToListAsync();
+        }
+
     }
 }

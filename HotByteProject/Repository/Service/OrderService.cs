@@ -139,11 +139,18 @@ namespace HotByteProject.Repository.Service
 
         public async Task<IEnumerable<Order>> GetOrdersByRestaurantAsync(int restaurantId)
         {
+            //return await _context.Orders
+            //    .Include(o => o.OrderItems)
+            //    .ThenInclude(oi => oi.Menu)
+            //    .Include(o => o.User)
+            //    .Where(o => o.OrderItems.Any(oi => oi.Menu.RestaurantId == restaurantId))
+            //    .ToListAsync();
             return await _context.Orders
-                .Include(o => o.OrderItems)
-                .ThenInclude(oi => oi.Menu)
-                .Where(o => o.OrderItems.Any(oi => oi.Menu.RestaurantId == restaurantId))
-                .ToListAsync();
+       .Include(o => o.User) // ✅ Include User
+       .Include(o => o.OrderItems)
+           .ThenInclude(oi => oi.Menu)
+       .Where(o => o.OrderItems.Any(oi => oi.Menu.RestaurantId == restaurantId))
+       .ToListAsync();
         }
 
         public async Task<List<OrderResponseDTO>> GetAllOrdersAsync()

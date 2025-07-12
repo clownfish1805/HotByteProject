@@ -8,6 +8,7 @@ namespace HotByteProject.Services.Implementations
         Task<IEnumerable<User>> GetAllUsersAsync();
         Task<IEnumerable<Restaurant>> GetAllRestaurantsAsync();
         Task<bool> DeleteRestaurantAsync(int restaurantId);
+
         Task<IEnumerable<MenuDetailsDTO>> GetAllMenusAsync();
         Task<List<AdminOrderResponseDTO>> GetAllOrdersAsync();
 

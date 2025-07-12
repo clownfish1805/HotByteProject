@@ -277,7 +277,7 @@ namespace HotByteProject.Tests
             _context.Menus.Add(menu);
             await _context.SaveChangesAsync();
 
-            var dto = new MenuDTO
+            var dto = new MenuCreateUpdateDTO
             {
                 ItemName = "Medu Vada",
                 Description = "Crispy",
@@ -305,7 +305,7 @@ namespace HotByteProject.Tests
             _context.Menus.Add(menu);
             await _context.SaveChangesAsync();
 
-            var dto = new MenuDTO
+            var dto = new MenuCreateUpdateDTO
             {
                 ItemName = "Sweet Pongal",
                 CategoryName = "Breakfast",

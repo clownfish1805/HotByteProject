@@ -17,7 +17,9 @@
         public Restaurant? Restaurant { get; set; }
 
         public bool IsDeleted { get; set; } = false;
-        public string Status { get; set; } 
+        public string Status { get; set; }
+
+        public string? ImageUrl { get; set; }
 
 
     }

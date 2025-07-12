@@ -23,22 +23,22 @@ namespace HotByteProject.Repository.Service
 
         public async Task<IEnumerable<Restaurant>> GetAllRestaurantsAsync()
         {
-            return await _context.Restaurants.Include(r => r.User).ToListAsync();
+            return await _context.Restaurants.Include(r => r.User).Where(r => !r.IsDeleted).ToListAsync();
         }
-        public async Task<bool> DeleteRestaurantAsync(int restaurantId)
-        {
-            var restaurant = await _context.Restaurants.FindAsync(restaurantId);
-            if (restaurant == null) return false;
+        //public async Task<bool> DeleteRestaurantAsync(int restaurantId)
+        //{
+        //    var restaurant = await _context.Restaurants.FindAsync(restaurantId);
+        //    if (restaurant == null) return false;
 
-            var user = await _context.Users.FindAsync(restaurant.UserId);
+        //    var user = await _context.Users.FindAsync(restaurant.UserId);
 
-            if (user != null)
-                _context.Users.Remove(user);
+        //    if (user != null)
+        //        _context.Users.Remove(user);
 
-            _context.Restaurants.Remove(restaurant);
-            await _context.SaveChangesAsync();
-            return true;
-        }
+        //    _context.Restaurants.Remove(restaurant);
+        //    await _context.SaveChangesAsync();
+        //    return true;
+        //}
         public async Task<IEnumerable<MenuDetailsDTO>> GetAllMenusAsync()
         {
             return await _context.Menus
@@ -60,16 +60,17 @@ namespace HotByteProject.Repository.Service
                 .ToListAsync();
         }
 
-
         public async Task<List<AdminOrderResponseDTO>> GetAllOrdersAsync()
         {
             var orders = await _context.Orders
                 .Include(o => o.OrderItems)
-                .ThenInclude(oi => oi.Menu)
+                    .ThenInclude(oi => oi.Menu)
+                .Include(o => o.User) // ✅ Include the user
                 .ToListAsync();
 
             return orders.Select(o => new AdminOrderResponseDTO
             {
+                Name = o.User?.Name ?? "Unknown", // ✅ Get User's Name
                 OrderId = o.OrderId,
                 OrderDate = o.OrderDate,
                 Status = o.Status,
@@ -83,6 +84,7 @@ namespace HotByteProject.Repository.Service
                 }).ToList()
             }).ToList();
         }
+
 
 
 
@@ -101,5 +103,17 @@ namespace HotByteProject.Repository.Service
             return true;
         }
 
+        public async Task<bool> DeleteRestaurantAsync(int restaurantId)
+        {
+            var restaurant = await _context.Restaurants
+                .FirstOrDefaultAsync(r => r.RestaurantId == restaurantId);
+
+            if (restaurant == null)
+                return false;
+
+            restaurant.IsDeleted = true;
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

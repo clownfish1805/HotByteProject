@@ -18,7 +18,17 @@ namespace HotByteProject.Controllers
             _orderService = orderService;
         }
 
-        private int GetUserId() => int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+        //private int GetUserId() => int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+
+        private int GetUserId()
+        {
+            var claim = User.FindFirst("UserId")?.Value;
+            if (string.IsNullOrEmpty(claim))
+                throw new UnauthorizedAccessException("User ID claim is missing.");
+
+            return int.Parse(claim);
+        }
+
 
         [Authorize(Roles = "User")]
         [HttpPost("place")]
@@ -99,6 +109,9 @@ namespace HotByteProject.Controllers
                     OrderDate = order.OrderDate,
                     Status = order.Status,
                     TotalAmount = order.TotalAmount,
+                    DeliveryAddress = order.DeliveryAddress,
+                    UserName = order.User?.Name ?? "Unknown", // ✅ Add this
+
                     Items = order.OrderItems.Select(oi => new OrderItemDTO
                     {
                         MenuId = oi.MenuId,

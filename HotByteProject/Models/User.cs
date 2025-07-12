@@ -23,5 +23,11 @@ namespace HotByteProject.Models
         [Required(ErrorMessage = "Address is required.")]
         public string Address { get; set; }
 
+        [Required(ErrorMessage = "Contact number is required.")]
+        [RegularExpression(@"^[1-9][0-9]{9}$", ErrorMessage = "Contact number must be 10 digits and cannot start with 0.")]
+        public string Contact { get; set; }
+
+        public string? ImageUrl { get; set; }
+
     }
 }

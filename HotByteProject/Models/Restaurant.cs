@@ -22,6 +22,9 @@ namespace HotByteProject.Models
 
         public User? User { get; set; }
 
+        public bool IsDeleted { get; set; }
+        public string? ImageUrl { get; set; }
+
         public ICollection<Menu>? Menus { get; set; }
 
     }

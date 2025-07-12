@@ -1,15 +1,15 @@
-﻿using HotByteProject.DTO;
+﻿using HotByteProject.Context;
+using HotByteProject.DTO;
 using HotByteProject.Models;
-using System.Security.Claims;
-using System.Text;
-using System;
-using HotByteProject.Context;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Cryptography;
-using System.Globalization;
 using HotByteProject.Services.Implementations;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace HotByteProject.Repository.Service
 {
@@ -24,6 +24,7 @@ namespace HotByteProject.Repository.Service
             _config = config;
         }
 
+        // REGISTER METHOD
         public async Task<string?> RegisterAsync(RegisterDTO model)
         {
             if (await _context.Users.AnyAsync(u => u.Email == model.Email))
@@ -38,51 +39,51 @@ namespace HotByteProject.Repository.Service
                 _ => "User"
             };
 
-            var hashedPassword = HashPassword(model.Password);
+            string hashedPassword = HashPassword(model.Password);
 
-            //user Registration
+            // Register as User
             if (finalRole == "User")
             {
                 if (string.IsNullOrWhiteSpace(model.UserName) ||
                     string.IsNullOrWhiteSpace(model.UserAddress) ||
                     string.IsNullOrWhiteSpace(model.UserContact))
-                {
                     throw new ArgumentException("User Name, Address, and Contact are required.");
-                }
 
                 var user = new User
                 {
                     Name = model.UserName,
                     Email = model.Email,
                     Address = model.UserAddress,
+                    Contact = model.UserContact,
                     Role = finalRole,
                     PasswordHash = hashedPassword
                 };
 
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
-
                 return GenerateToken(user);
             }
 
-            //Restaurant Registration
+            // Register as Restaurant
             if (finalRole == "Restaurant")
             {
                 if (string.IsNullOrWhiteSpace(model.RestaurantName) ||
                     string.IsNullOrWhiteSpace(model.RestaurantAddress) ||
                     string.IsNullOrWhiteSpace(model.RestaurantContact))
-                {
                     throw new ArgumentException("Restaurant Name, Address, and Contact are required.");
-                }
 
                 var user = new User
                 {
-                    Name = model.RestaurantName, 
+                    Name = model.RestaurantName,
                     Email = model.Email,
                     Address = model.RestaurantAddress,
+                    Contact = model.RestaurantContact,
+                    ImageUrl = model.ImageUrl,
+
                     Role = finalRole,
                     PasswordHash = hashedPassword
                 };
+
 
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
@@ -101,8 +102,8 @@ namespace HotByteProject.Repository.Service
                 return GenerateToken(user);
             }
 
-            //Admin Registration
-            var defaultUser = new User
+            // Register as Admin
+            var adminUser = new User
             {
                 Name = "Admin",
                 Email = model.Email,
@@ -111,36 +112,62 @@ namespace HotByteProject.Repository.Service
                 PasswordHash = hashedPassword
             };
 
-            _context.Users.Add(defaultUser);
+            _context.Users.Add(adminUser);
             await _context.SaveChangesAsync();
 
-            return GenerateToken(defaultUser);
+            return GenerateToken(adminUser);
         }
 
-
-        public async Task<string?> LoginAsync(LoginDTO model)
+        // LOGIN METHOD
+        public async Task<AuthResponseDTO?> LoginAsync(LoginDTO model)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
-            if (user == null || !VerifyPassword(model.Password, user.PasswordHash))
+            if (user == null)
                 return null;
 
-            return GenerateToken(user);
+            if (!VerifyPassword(model.Password, user.PasswordHash))
+                return null;
+
+            var token = GenerateToken(user);
+            var role = user.Role;
+
+            var response = new AuthResponseDTO
+            {
+                Token = token,
+                Role = role
+            };
+
+            if (role == "Restaurant")
+            {
+                var restaurant = await _context.Restaurants
+                    .FirstOrDefaultAsync(r => r.UserId == user.UserId);
+
+                if (restaurant != null)
+                    response.RestaurantId = restaurant.RestaurantId;
+            }
+            else if (role == "User")
+            {
+                response.UserId = user.UserId;
+            }
+
+            return response;
         }
 
+
+        // GENERATE JWT
         private string GenerateToken(User user)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            // Base claims  
             var claims = new List<Claim>
-           {
-               new Claim(ClaimTypes.Name, user.Email),
-               new Claim(ClaimTypes.Role, CultureInfo.CurrentCulture.TextInfo.ToTitleCase(user.Role)),
-               new Claim("UserId", user.UserId.ToString())
-           };
+            {
+                new Claim(ClaimTypes.Name, user.Email),
+                new Claim(ClaimTypes.Role, CultureInfo.CurrentCulture.TextInfo.ToTitleCase(user.Role)),
+                new Claim("UserId", user.UserId.ToString())
+            };
 
-            // Add RestaurantId if the user is a Restaurant  
+            // Include RestaurantId for restaurant role
             if (user.Role == "Restaurant")
             {
                 var restaurant = _context.Restaurants.FirstOrDefault(r => r.UserId == user.UserId);
@@ -161,7 +188,7 @@ namespace HotByteProject.Repository.Service
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-
+        // HASH PASSWORD (SHA256)
         private string HashPassword(string password)
         {
             using var sha = SHA256.Create();
@@ -170,9 +197,11 @@ namespace HotByteProject.Repository.Service
             return Convert.ToBase64String(hash);
         }
 
+        // VERIFY PASSWORD
         private bool VerifyPassword(string inputPassword, string storedHash)
         {
-            return HashPassword(inputPassword) == storedHash;
+            var hashedInput = HashPassword(inputPassword);
+            return hashedInput == storedHash;
         }
     }
 }

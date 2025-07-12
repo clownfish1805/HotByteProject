@@ -6,9 +6,11 @@
         public DateTime OrderDate { get; set; }
         public string Status { get; set; }
         public decimal TotalAmount { get; set; }
-
         public string DeliveryAddress { get; set; }
-        public List<OrderItemDTO> Items { get; set; } 
 
+        public string UserName { get; set; } // ✅ Add this
+
+        public List<OrderItemDTO> Items { get; set; }
     }
+
 }

@@ -1,4 +1,5 @@
 ﻿using HotByteProject.DTO;
+using HotByteProject.Helpers;
 using HotByteProject.Repository.Implementations;
 using HotByteProject.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -17,23 +18,48 @@ namespace HotByteProject.Controllers
             _categoryService = categoryService;
         }
 
-        // Create a new category
+        //// Create a new category
+        //[Authorize(Roles = "Admin, Restaurant")]
+        //[HttpPost]
+        //public async Task<IActionResult> Create([FromBody] string name)
+        //{
+        //    if (string.IsNullOrWhiteSpace(name))
+        //        return BadRequest("Category name is required.");
+
+        //    var success = await _categoryService.CreateCategoryAsync(name);
+        //    if (!success)
+        //        return BadRequest("Category already exists or name is invalid.");
+
+        //    return Ok("Category created successfully.");
+        //}
+
+
         [Authorize(Roles = "Admin, Restaurant")]
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] string name)
+        public async Task<IActionResult> Create([FromForm] CategoryBasicDTO dto)
         {
-            if (string.IsNullOrWhiteSpace(name))
+            if (string.IsNullOrWhiteSpace(dto.CategoryName))
                 return BadRequest("Category name is required.");
 
-            var success = await _categoryService.CreateCategoryAsync(name);
-            if (!success)
-                return BadRequest("Category already exists or name is invalid.");
+            var exists = await _categoryService.CategoryExistsAsync(dto.CategoryName);
+            if (exists)
+                return Conflict("Category already exists.");
+
+            string? imageUrl = null;
+            if (dto.ImageFile != null)
+            {
+                imageUrl = await FileHelper.SaveImageAsync(dto.ImageFile, "categoryImages");
+            }
+
+            var created = await _categoryService.CreateCategoryAsync(dto.CategoryName, imageUrl);
+            if (!created)
+                return StatusCode(500, "Failed to create category.");
 
             return Ok("Category created successfully.");
         }
 
         // Get all categories with their menus
-        [Authorize(Roles = "Admin, Restaurant, User")]
+        [AllowAnonymous]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -42,7 +68,7 @@ namespace HotByteProject.Controllers
         }
 
         // Get all menus under a specific category
-        [Authorize(Roles = "Admin, Restaurant, User")]
+        [AllowAnonymous]
         [HttpGet("{name}/menus")]
         public async Task<IActionResult> GetMenusByCategory(string name)
         {
@@ -65,7 +91,8 @@ namespace HotByteProject.Controllers
                 AvailabilityTime = m.AvailabilityTime,
                 NutritionalInfo = m.NutritionalInfo,
                 RestaurantId = m.RestaurantId,
-                RestaurantName = m.Restaurant?.RestaurantName
+                RestaurantName = m.Restaurant?.RestaurantName,
+                ImageUrl=m.ImageUrl
             }).ToList();
 
             return Ok(results);
@@ -85,5 +112,15 @@ namespace HotByteProject.Controllers
 
             return Ok("Category and its associated menus soft-deleted successfully.");
         }
+
+        // Get only category ID and Name (no menus)
+        [AllowAnonymous]
+        [HttpGet("names")]
+        public async Task<IActionResult> GetCategoryNames()
+        {
+            var result = await _categoryService.GetCategoryNamesAsync();
+            return Ok(result);
+        }
+
     }
 }

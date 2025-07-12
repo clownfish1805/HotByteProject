@@ -2,7 +2,6 @@
 using HotByteProject.Context;
 using HotByteProject.DTO;
 using HotByteProject.Models;
-using HotByteProject.Services.Implementations;
 using Microsoft.EntityFrameworkCore;
 
 namespace HotByteProject.Repository.Service
@@ -20,7 +19,11 @@ namespace HotByteProject.Repository.Service
 
         public async Task<IEnumerable<MenuDetailsDTO>> GetAllMenusAsync()
         {
-            var menus = await _context.Menus.Include(m => m.Restaurant).ToListAsync();
+            var menus = await _context.Menus
+                .Include(m => m.Restaurant)
+                .Include(m => m.Category)
+                .ToListAsync();
+
             return _mapper.Map<List<MenuDetailsDTO>>(menus);
         }
 
@@ -37,6 +40,7 @@ namespace HotByteProject.Repository.Service
         {
             var menus = await _context.Menus
                 .Include(m => m.Restaurant)
+                .Include(m => m.Category)
                 .Where(m => m.RestaurantId == restaurantId)
                 .ToListAsync();
 
@@ -48,81 +52,158 @@ namespace HotByteProject.Repository.Service
             return await _context.Menus.FindAsync(id);
         }
 
-        public async Task<Menu> AddMenuAsync(MenuDTO menuDto)
+        public async Task<List<MenuDetailsDTO>> GetAllMenus()
         {
-            var category = await _context.Categories
-                .FirstOrDefaultAsync(c => c.CategoryName.ToLower() == menuDto.CategoryName.ToLower());
-
-            if (category == null)
-                throw new Exception("Category not found. Please create the category first.");
-
-            var menu = new Menu
-            {
-                ItemName = menuDto.ItemName,
-                Description = menuDto.Description,
-                CategoryId = category.CategoryId,
-                Price = menuDto.Price,
-                DietaryInfo = menuDto.DietaryInfo,
-                TasteInfo = menuDto.TasteInfo,
-                NutritionalInfo = menuDto.NutritionalInfo,
-                AvailabilityTime = menuDto.AvailabilityTime,
-                RestaurantId = menuDto.RestaurantId,
-                Status = menuDto.Status
-
-            };
-
-            _context.Menus.Add(menu);
-            await _context.SaveChangesAsync();
-
-            return menu; 
+            return await _context.Menus
+                .Include(m => m.Restaurant)
+                .Include(m => m.Category)
+                .Select(m => new MenuDetailsDTO
+                {
+                    MenuId = m.MenuId,
+                    ItemName = m.ItemName,
+                    Description = m.Description,
+                    Category = m.Category.CategoryName,
+                    Price = m.Price,
+                    DietaryInfo = m.DietaryInfo,
+                    TasteInfo = m.TasteInfo,
+                    AvailabilityTime = m.AvailabilityTime,
+                    NutritionalInfo = m.NutritionalInfo,
+                    RestaurantId = m.RestaurantId,
+                    RestaurantName = m.Restaurant.RestaurantName,
+                    Status = m.Status,
+                    ImageUrl = m.ImageUrl
+                })
+                .ToListAsync();
         }
 
 
+        public async Task<MenuDTO?> AddMenuAsync(MenuDTO dto)
+        {
+            var category = await _context.Categories
+    .FirstOrDefaultAsync(c => c.CategoryName.ToLower().Trim() == dto.CategoryName.ToLower().Trim() && !c.IsDeleted);
 
-        public async Task<bool> UpdateMenuAsync(int id, MenuDTO dto, int restaurantId)
+
+            // ❌ If category not found, throw a clear exception
+            if (category == null)
+            {
+                var available = await _context.Categories
+                    .Where(c => !c.IsDeleted)
+                    .Select(c => c.CategoryName)
+                    .ToListAsync();
+
+                throw new Exception($"Invalid category name '{dto.CategoryName}'. Available: {string.Join(", ", available)}");
+            }
+
+            // ✅ Create and populate the Menu object
+            var menu = new Menu
+            {
+                ItemName = dto.ItemName,
+                Description = dto.Description,
+                CategoryId = category.CategoryId, // use resolved CategoryId
+                Price = dto.Price,
+                DietaryInfo = dto.DietaryInfo,
+                TasteInfo = dto.TasteInfo,
+                AvailabilityTime = dto.AvailabilityTime,
+                NutritionalInfo = dto.NutritionalInfo,
+                RestaurantId = dto.RestaurantId,
+                Status = dto.Status,
+                ImageUrl = dto.ImageUrl,
+                IsDeleted = false
+            };
+
+            // 💾 Save to database
+            _context.Menus.Add(menu);
+            await _context.SaveChangesAsync();
+
+            return dto;
+        }
+
+
+        public async Task<bool> UpdateMenuAsync(int id, MenuCreateUpdateDTO dto, int restaurantId)
         {
             var menu = await _context.Menus
-                .FirstOrDefaultAsync(m => m.MenuId == id && m.RestaurantId == restaurantId);
+                .FirstOrDefaultAsync(m => m.MenuId == id && m.RestaurantId == restaurantId && !m.IsDeleted);
 
             if (menu == null)
                 return false;
 
+            // ✅ Normalize input and match category
+            var inputCategory = dto.CategoryName?.Trim().ToLower();
+
             var category = await _context.Categories
-                .FirstOrDefaultAsync(c => c.CategoryName.ToLower() == dto.CategoryName.ToLower());
+                .FirstOrDefaultAsync(c => c.CategoryName.ToLower() == inputCategory);
 
             if (category == null)
-                throw new Exception("Invalid category name.");
+            {
+                // Optional: show available categories for debugging
+                var allCategories = await _context.Categories.Select(c => c.CategoryName).ToListAsync();
+                var debugList = string.Join(", ", allCategories);
+                throw new Exception($"Invalid category name '{dto.CategoryName}'. Available: {debugList}");
+            }
 
+            // Update fields
             menu.ItemName = dto.ItemName;
             menu.Description = dto.Description;
-            menu.CategoryId = category.CategoryId; 
+            menu.CategoryId = category.CategoryId;
             menu.Price = dto.Price;
             menu.DietaryInfo = dto.DietaryInfo;
             menu.TasteInfo = dto.TasteInfo;
+            menu.NutritionalInfo = dto.NutritionalInfo;
             menu.AvailabilityTime = dto.AvailabilityTime;
+            menu.Status = dto.Status;
+
+            // ✅ Handle new image if provided
+            if (dto.ImageFile != null)
+            {
+                var fileName = $"{Guid.NewGuid()}_{dto.ImageFile.FileName}";
+                var filePath = Path.Combine("wwwroot/images", fileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await dto.ImageFile.CopyToAsync(stream);
+                }
+
+                menu.ImageUrl = $"/images/{fileName}";
+            }
 
             await _context.SaveChangesAsync();
             return true;
         }
 
 
+        //public async Task<bool> DeleteMenuByNameAsync(string itemName, int restaurantId)
+        //{
+        //    var menu = await _context.Menus
+        //        .FirstOrDefaultAsync(m =>
+        //            m.ItemName.ToLower() == itemName.ToLower() &&
+        //            m.RestaurantId == restaurantId &&
+        //            !m.IsDeleted);
 
-        public async Task<bool> DeleteMenuByNameAsync(string itemName, int restaurantId)
+        //    if (menu == null)
+        //        return false;
+
+        //    menu.IsDeleted = true;
+        //    await _context.SaveChangesAsync();
+        //    return true;
+        //}
+
+        public async Task<bool> DeleteMenuByNameAsync(string itemName, int? restaurantId = null)
         {
-            var menu = await _context.Menus
-                .FirstOrDefaultAsync(m =>
-                    m.ItemName.ToLower() == itemName.ToLower()
-                    && m.RestaurantId == restaurantId
-                    && !m.IsDeleted);
+            var query = _context.Menus.Where(m => m.ItemName == itemName && !m.IsDeleted);
 
-            if (menu == null)
-                return false;
+            if (restaurantId.HasValue)
+            {
+                query = query.Where(m => m.RestaurantId == restaurantId.Value);
+            }
+
+            var menu = await query.FirstOrDefaultAsync();
+            if (menu == null) return false;
 
             menu.IsDeleted = true;
             await _context.SaveChangesAsync();
             return true;
         }
-
 
     }
 }

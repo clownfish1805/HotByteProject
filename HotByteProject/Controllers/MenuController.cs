@@ -1,10 +1,11 @@
 ﻿using HotByteProject.DTO;
+using HotByteProject.Models;
+using HotByteProject.Services.Implementations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using HotByteProject.Context;
-using HotByteProject.Models;
-using HotByteProject.Services.Implementations;
+using AutoMapper;
 
 namespace HotByteProject.Controllers
 {
@@ -14,14 +15,88 @@ namespace HotByteProject.Controllers
     {
         private readonly IMenuService _menuService;
         private readonly AppDbContext _context;
+        private readonly IMapper _mapper;
 
-        public MenuController(IMenuService menuService, AppDbContext context)
+        public MenuController(IMenuService menuService, AppDbContext context, IMapper mapper)
         {
             _menuService = menuService;
             _context = context;
+            _mapper = mapper;
+        }
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAllMenus()
+        {
+            var menus = await _menuService.GetAllMenus();
+            return Ok(menus);
         }
 
-        [Authorize(Roles = "Admin, Restaurant, User")]
+
+        [HttpPost("create")]
+        [Authorize(Roles = "Restaurant,Admin")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CreateMenu([FromForm] MenuCreateUpdateDTO dto)
+        {
+
+            // 🧪 DEBUG: Log incoming data
+            Console.WriteLine("🧪 DTO.CategoryName = " + dto.CategoryName);
+            Console.WriteLine("🧪 DTO.ItemName = " + dto.ItemName);
+            Console.WriteLine("🧪 DTO.RestaurantId = " + dto.RestaurantId);
+            Console.WriteLine("🧪 DTO.Price = " + dto.Price);
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    Console.WriteLine("❌ ModelState Invalid");
+                    foreach (var key in ModelState.Keys)
+                    {
+                        var errors = ModelState[key].Errors;
+                        foreach (var error in errors)
+                        {
+                            Console.WriteLine($"⚠️ {key}: {error.ErrorMessage}");
+                        }
+                    }
+                    return BadRequest(ModelState);
+                }
+
+
+             
+                // ✅ Save image if uploaded
+                string? imageUrl = null;
+                if (dto.ImageFile != null)
+                {
+                    var fileName = $"{Guid.NewGuid()}_{dto.ImageFile.FileName}";
+                    var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
+
+                    if (!Directory.Exists(folderPath))
+                        Directory.CreateDirectory(folderPath);
+
+                    var filePath = Path.Combine(folderPath, fileName);
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await dto.ImageFile.CopyToAsync(stream);
+                    }
+
+                    imageUrl = $"/images/{fileName}";
+                }
+
+                // ✅ Map DTO and pass to service
+                var menuDto = _mapper.Map<MenuDTO>(dto);
+                menuDto.ImageUrl = imageUrl;
+
+                var created = await _menuService.AddMenuAsync(menuDto);
+                return Ok(created);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error creating menu: {ex.Message}");
+            }
+        }
+
+
+
+        [AllowAnonymous]
         [HttpGet("all")]
         public async Task<IActionResult> GetAll()
         {
@@ -49,7 +124,8 @@ namespace HotByteProject.Controllers
                         NutritionalInfo = m.NutritionalInfo,
                         RestaurantId = m.RestaurantId,
                         RestaurantName = m.Restaurant.RestaurantName,
-                        Status = m.Status
+                        Status = m.Status,
+                        ImageUrl = m.ImageUrl
                     }).ToList()
                 });
 
@@ -75,183 +151,76 @@ namespace HotByteProject.Controllers
             }
         }
 
-
-        [Authorize(Roles = "Admin, Restaurant, User")]
+        [AllowAnonymous]
         [HttpGet("search")]
         public async Task<IActionResult> SearchMenuByName([FromQuery] string name)
         {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(name))
-                    return BadRequest("Item name is required.");
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest("Item name is required.");
 
-                var menus = await _context.Menus
-                    .Include(m => m.Restaurant)
-                    .Include(m => m.Category)
-                    .Where(m => m.ItemName.ToLower().Contains(name.ToLower()) &&
-                                m.AvailabilityTime.ToLower() != "unavailable")
-                    .Select(m => new MenuDetailsDTO
-                    {
-                        MenuId = m.MenuId,
-                        ItemName = m.ItemName,
-                        Description = m.Description,
-                        Category = m.Category.CategoryName,
-                        Price = m.Price,
-                        DietaryInfo = m.DietaryInfo,
-                        TasteInfo = m.TasteInfo,
-                        AvailabilityTime = m.AvailabilityTime,
-                        NutritionalInfo = m.NutritionalInfo,
-                        RestaurantId = m.RestaurantId,
-                        RestaurantName = m.Restaurant.RestaurantName,
-                        Status = m.Status
-                    })
-                    .ToListAsync();
+            var menus = await _context.Menus
+                .Include(m => m.Restaurant)
+                .Include(m => m.Category)
+                .Where(m => m.ItemName.ToLower().Contains(name.ToLower()) &&
+                            m.AvailabilityTime.ToLower() != "unavailable")
+                .Select(m => new MenuDetailsDTO
+                {
+                    MenuId = m.MenuId,
+                    ItemName = m.ItemName,
+                    Description = m.Description,
+                    Category = m.Category.CategoryName,
+                    Price = m.Price,
+                    DietaryInfo = m.DietaryInfo,
+                    TasteInfo = m.TasteInfo,
+                    AvailabilityTime = m.AvailabilityTime,
+                    NutritionalInfo = m.NutritionalInfo,
+                    RestaurantId = m.RestaurantId,
+                    RestaurantName = m.Restaurant.RestaurantName,
+                    Status = m.Status,
+                    ImageUrl = m.ImageUrl
+                })
+                .ToListAsync();
 
-                if (!menus.Any())
-                    return NotFound("No matching menu items found.");
-
-                return Ok(menus);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error searching menu items: {ex.Message}");
-            }
+            return menus.Any() ? Ok(menus) : NotFound("No matching menu items found.");
         }
 
-        [Authorize(Roles = "Admin, Restaurant, User")]
-        [HttpGet("veg/nonveg")]
+        [AllowAnonymous]
+        [HttpGet("veg-nonveg")]
         public async Task<IActionResult> SearchByDietaryInfo([FromQuery] string dietary)
         {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(dietary))
-                    return BadRequest("Dietary info is required (e.g., Vegetarian, Non-Vegetarian).");
+            if (string.IsNullOrWhiteSpace(dietary))
+                return BadRequest("Dietary info is required (e.g., Vegetarian, Non-Vegetarian).");
 
-                var menus = await _context.Menus
-                    .Include(m => m.Restaurant)
-                    .Include(m => m.Category)
-                    .Where(m => m.DietaryInfo.ToLower() == dietary.ToLower() &&
-                                m.AvailabilityTime.ToLower() != "unavailable")
-                    .Select(m => new MenuDetailsDTO
-                    {
-                        MenuId = m.MenuId,
-                        ItemName = m.ItemName,
-                        Description = m.Description,
-                        Category = m.Category.CategoryName,
-                        Price = m.Price,
-                        DietaryInfo = m.DietaryInfo,
-                        TasteInfo = m.TasteInfo,
-                        AvailabilityTime = m.AvailabilityTime,
-                        NutritionalInfo = m.NutritionalInfo,
-                        RestaurantId = m.RestaurantId,
-                        RestaurantName = m.Restaurant.RestaurantName,
-                        Status = m.Status
-                    })
-                    .ToListAsync();
-
-                if (!menus.Any())
-                    return NotFound("No menu items found for the specified dietary preference.");
-
-                return Ok(menus);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error filtering menu by dietary info: {ex.Message}");
-            }
-        }
-
-        [Authorize(Roles = "Restaurant,Admin")]
-        [HttpPost]
-        public async Task<ActionResult<MenuDetailsDTO>> AddMenuAsync(MenuDTO menuDto)
-        {
-            try
-            {
-                var category = await _context.Categories
-                    .FirstOrDefaultAsync(c => c.CategoryName.ToLower() == menuDto.CategoryName.ToLower());
-
-                if (category == null)
-                    return BadRequest("Category not found. Please create the category first.");
-
-                //Duplicate check
-                var exists = await _context.Menus.AnyAsync(m =>
-                    m.ItemName.ToLower() == menuDto.ItemName.ToLower() &&
-                    m.RestaurantId == menuDto.RestaurantId);
-
-                if (exists)
-                    return Conflict("Menu item with the same name already exists for this restaurant.");
-
-                var menu = new Menu
+            var menus = await _context.Menus
+                .Include(m => m.Restaurant)
+                .Include(m => m.Category)
+                .Where(m => m.DietaryInfo.ToLower() == dietary.ToLower() &&
+                            m.AvailabilityTime.ToLower() != "unavailable")
+                .Select(m => new MenuDetailsDTO
                 {
-                    ItemName = menuDto.ItemName,
-                    Description = menuDto.Description,
-                    CategoryId = category.CategoryId,
-                    Price = menuDto.Price,
-                    DietaryInfo = menuDto.DietaryInfo,
-                    TasteInfo = menuDto.TasteInfo,
-                    NutritionalInfo = menuDto.NutritionalInfo,
-                    AvailabilityTime = menuDto.AvailabilityTime,
-                    RestaurantId = menuDto.RestaurantId,
-                    Status = menuDto.Status
-                };
+                    MenuId = m.MenuId,
+                    ItemName = m.ItemName,
+                    Description = m.Description,
+                    Category = m.Category.CategoryName,
+                    Price = m.Price,
+                    DietaryInfo = m.DietaryInfo,
+                    TasteInfo = m.TasteInfo,
+                    AvailabilityTime = m.AvailabilityTime,
+                    NutritionalInfo = m.NutritionalInfo,
+                    RestaurantId = m.RestaurantId,
+                    RestaurantName = m.Restaurant.RestaurantName,
+                    Status = m.Status,
+                    ImageUrl = m.ImageUrl
+                })
+                .ToListAsync();
 
-                _context.Menus.Add(menu);
-                await _context.SaveChangesAsync();
-
-                var menuWithDetails = await _context.Menus
-                    .Include(m => m.Category)
-                    .Include(m => m.Restaurant)
-                    .FirstOrDefaultAsync(m => m.MenuId == menu.MenuId);
-
-                return new MenuDetailsDTO
-                {
-                    MenuId = menuWithDetails.MenuId,
-                    ItemName = menuWithDetails.ItemName,
-                    Description = menuWithDetails.Description,
-                    Category = menuWithDetails.Category?.CategoryName ?? "N/A",
-                    Price = menuWithDetails.Price,
-                    DietaryInfo = menuWithDetails.DietaryInfo,
-                    TasteInfo = menuWithDetails.TasteInfo,
-                    NutritionalInfo = menuWithDetails.NutritionalInfo,
-                    AvailabilityTime = menuWithDetails.AvailabilityTime,
-                    RestaurantId = menuWithDetails.RestaurantId,
-                    RestaurantName = menuWithDetails.Restaurant?.RestaurantName ?? "N/A",
-                    Status = menuWithDetails.Status
-                };
-            }
-
-            catch (Exception ex)
-            {
-                throw new Exception($"Error adding menu: {ex.Message} - {ex.InnerException?.Message}");
-            }
-
+            return menus.Any() ? Ok(menus) : NotFound("No items found for the given dietary filter.");
         }
 
-
         [Authorize(Roles = "Restaurant,Admin")]
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateMenu(int id, [FromBody] MenuDTO dto)
-        {
-            try
-            {
-                var restaurantIdClaim = User.FindFirst("RestaurantID")?.Value;
-                if (restaurantIdClaim == null)
-                    return Unauthorized("RestaurantId not found in token.");
-
-                int restaurantId = int.Parse(restaurantIdClaim);
-
-                var success = await _menuService.UpdateMenuAsync(id, dto, restaurantId);
-                return !success
-                    ? NotFound("Menu not found or not owned by you.")
-                    : Ok("Menu updated successfully");
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error updating menu: {ex.Message}");
-            }
-        }
-        [Authorize(Roles = "Restaurant,Admin")]
-        [HttpDelete("by-name/{itemName}")]
-        public async Task<IActionResult> DeleteMenuByName(string itemName)
+        [HttpPost("update/{id}")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UpdateMenu(int id, [FromForm] MenuCreateUpdateDTO dto)
         {
             try
             {
@@ -261,12 +230,67 @@ namespace HotByteProject.Controllers
 
                 int restaurantId = int.Parse(restaurantIdClaim);
 
-                var success = await _menuService.DeleteMenuByNameAsync(itemName, restaurantId);
-                return !success ? NotFound("Menu not found or access denied.") : Ok("Menu soft-deleted");
+                var success = await _menuService.UpdateMenuAsync(id, dto, restaurantId);
+
+                return success
+                    ? Ok("Menu updated successfully.")
+                    : NotFound("Menu not found or not owned by you.");
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Error soft-deleting menu by name: {ex.Message}");
+                return StatusCode(500, $"Error updating menu: {ex.Message}");
+            }
+        }
+
+
+        //[Authorize(Roles = "Restaurant,Admin")]
+        //[HttpDelete("by-name/{itemName}")]
+        //public async Task<IActionResult> DeleteMenuByName(string itemName)
+        //{
+        //    try
+        //    {
+        //        var restaurantIdClaim = User.FindFirst("RestaurantId")?.Value;
+        //        if (restaurantIdClaim == null)
+        //            return Unauthorized("RestaurantId not found in token.");
+
+        //        int restaurantId = int.Parse(restaurantIdClaim);
+        //        var success = await _menuService.DeleteMenuByNameAsync(itemName, restaurantId);
+
+        //        return success ? Ok("Menu soft-deleted") : NotFound("Menu not found or access denied.");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, $"Error deleting menu: {ex.Message}");
+        //    }
+        //}
+
+        [Authorize(Roles = "Restaurant,Admin")]
+        [HttpDelete("by-name/{itemName}")]
+        public async Task<IActionResult> DeleteMenuByName(string itemName)
+        {
+            try
+            {
+                var role = User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+
+                int? restaurantId = null;
+
+                if (role == "Restaurant")
+                {
+                    var restaurantIdClaim = User.FindFirst("RestaurantId")?.Value;
+                    if (restaurantIdClaim == null)
+                        return Unauthorized("RestaurantId not found in token.");
+
+                    restaurantId = int.Parse(restaurantIdClaim);
+                }
+
+                // Pass null for restaurantId if Admin
+                var success = await _menuService.DeleteMenuByNameAsync(itemName, restaurantId);
+
+                return success ? Ok("Menu soft-deleted") : NotFound("Menu not found or access denied.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error deleting menu: {ex.Message}");
             }
         }
 
