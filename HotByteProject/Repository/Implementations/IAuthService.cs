@@ -7,5 +7,7 @@ namespace HotByteProject.Services.Implementations
         Task<string?> RegisterAsync(RegisterDTO model);
         Task<AuthResponseDTO?> LoginAsync(LoginDTO model);
 
+
+
     }
 }

@@ -95,6 +95,13 @@ public class Program
             });
         });
 
+
+        // 🔽 Add this to register log4net
+        builder.Logging.ClearProviders();
+        builder.Logging.AddLog4Net("log4net.config");
+
+
+
         // ✅ Build AFTER configuring all services
         var app = builder.Build();
 

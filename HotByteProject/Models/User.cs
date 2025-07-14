@@ -29,5 +29,8 @@ namespace HotByteProject.Models
 
         public string? ImageUrl { get; set; }
 
+ 
+
+
     }
 }
