@@ -93,6 +93,19 @@ namespace HotByteProject.Context
             // ------------------------
             modelBuilder.Entity<Menu>().HasQueryFilter(m => !m.IsDeleted);
             modelBuilder.Entity<Category>().HasQueryFilter(c => !c.IsDeleted);
+
+            // ➊  Filter out restaurants that were soft‑deleted
+            modelBuilder.Entity<Restaurant>()
+                .HasQueryFilter(r => !r.IsDeleted);
+
+            // ➋  Filter out menus that are either deleted *or* whose parent restaurant is deleted
+            modelBuilder.Entity<Menu>()
+                .HasQueryFilter(m => !m.IsDeleted && !m.Restaurant.IsDeleted);
+
+            // ➌  If you soft‑delete categories too (already present)
+            modelBuilder.Entity<Category>()
+                .HasQueryFilter(c => !c.IsDeleted);
+
         }
 
         // Optional: if you plan to implement service-like methods here

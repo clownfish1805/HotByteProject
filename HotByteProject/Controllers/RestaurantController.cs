@@ -27,6 +27,7 @@ namespace HotByteProject.Controllers
             try
             {
                 var restaurants = await _context.Restaurants
+                    .Where(r => !r.IsDeleted)
                     .Select(r => new
                     {
                         r.UserId,
